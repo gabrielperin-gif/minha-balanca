@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Minha Balança</title>
+  <meta name="description" content="App sem propaganda para balança de bioimpedância Bluetooth (OKOK / Wellmix).">
+  <meta name="theme-color" content="#0f766e">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <h1>Minha Balança</h1>
+    <span id="profileName" class="topbar-sub"></span>
+  </header>
+
+  <main>
+    <!-- ============ PESAR ============ -->
+    <section id="view-weigh" class="view active" aria-label="Pesar">
+      <div id="setupCard" class="card notice" hidden>
+        <strong>Antes de começar</strong>
+        <p>Preencha seu perfil (sexo, nascimento e altura) para calcular gordura, músculo e os demais índices.</p>
+        <button class="btn secondary" data-goto="profile">Preencher perfil</button>
+      </div>
+
+      <div id="btHelp" class="card notice warn" hidden>
+        <strong>Falta liberar o Bluetooth no Chrome</strong>
+        <p id="btHelpReason"></p>
+        <ol>
+          <li>Abra este app no <b>Chrome do Android</b>.</li>
+          <li>Na barra de endereço, digite <code>chrome://flags</code>.</li>
+          <li>Busque <b>Experimental Web Platform features</b> e mude para <b>Enabled</b>.</li>
+          <li>Busque <b>Web Bluetooth new permissions backend</b> e mude para <b>Enabled</b> (se aparecer).</li>
+          <li>Toque em <b>Relaunch</b> para reiniciar o Chrome.</li>
+          <li>Deixe o <b>Bluetooth</b> e a <b>Localização</b> do celular ligados.</li>
+        </ol>
+        <p class="muted">Isso é necessário porque a balança só "anuncia" o peso pelo ar, sem conexão, e o Chrome ainda trata a leitura desses anúncios como recurso experimental.</p>
+      </div>
+
+      <div class="scale-display card">
+        <div class="weight-line">
+          <span id="liveWeight" class="weight">--,-</span><span class="unit">kg</span>
+        </div>
+        <div id="statusLine" class="status" role="status" aria-live="polite">Toque em <b>Pesar</b> e suba na balança descalço.</div>
+        <div id="deltaLine" class="delta"></div>
+        <button id="btnWeigh" class="btn primary big">Pesar</button>
+      </div>
+
+      <h2 class="section-title" id="resultsTitle" hidden>Última medição</h2>
+      <div id="results" class="metrics"></div>
+      <p id="resultsNote" class="muted small" hidden></p>
+    </section>
+
+    <!-- ============ HISTÓRICO ============ -->
+    <section id="view-history" class="view" aria-label="Histórico">
+      <div class="card">
+        <div class="row between">
+          <h2 class="card-title">Evolução do peso</h2>
+          <div class="seg" id="rangeSeg" role="tablist">
+            <button data-range="30" class="on">30d</button>
+            <button data-range="90">90d</button>
+            <button data-range="365">1 ano</button>
+            <button data-range="0">Tudo</button>
+          </div>
+        </div>
+        <div id="chart" class="chart"></div>
+        <div id="chartSummary" class="muted small"></div>
+      </div>
+
+      <div id="historyList" class="list"></div>
+
+      <div class="card">
+        <h2 class="card-title">Adicionar peso manualmente</h2>
+        <form id="manualForm" class="row gap">
+          <input id="manualWeight" type="number" inputmode="decimal" step="0.05" min="2" max="250" placeholder="Peso em kg" required>
+          <button class="btn secondary" type="submit">Adicionar</button>
+        </form>
+      </div>
+    </section>
+
+    <!-- ============ PERFIL ============ -->
+    <section id="view-profile" class="view" aria-label="Perfil">
+      <form id="profileForm" class="card form">
+        <h2 class="card-title">Seu perfil</h2>
+        <label>Nome <input name="name" type="text" autocomplete="given-name" placeholder="Opcional"></label>
+        <fieldset class="radio-row">
+          <legend>Sexo</legend>
+          <label><input type="radio" name="sex" value="M" required> Masculino</label>
+          <label><input type="radio" name="sex" value="F"> Feminino</label>
+        </fieldset>
+        <label>Data de nascimento <input name="birth" type="date" required></label>
+        <label>Altura (cm) <input name="height" type="number" inputmode="numeric" min="90" max="230" required></label>
+        <label>Meta de peso (kg) <input name="goal" type="number" inputmode="decimal" step="0.1" min="20" max="250" placeholder="Opcional"></label>
+        <button class="btn primary" type="submit">Salvar perfil</button>
+        <p id="profileSaved" class="muted small" hidden>Perfil salvo.</p>
+      </form>
+
+      <form id="settingsForm" class="card form">
+        <h2 class="card-title">Ajustes</h2>
+        <label>Correção da gordura (%)
+          <input name="fatOffset" type="number" step="0.1" min="-15" max="15" value="0">
+          <span class="muted small">Se o app antigo mostrava, por exemplo, 2% a mais de gordura para a mesma pesagem, coloque 2.</span>
+        </label>
+        <label>Modo de leitura Bluetooth
+          <select name="btMethod">
+            <option value="auto">Automático (recomendado)</option>
+            <option value="scan">Escuta geral (Experimental Web Platform features)</option>
+            <option value="device">Escolher a balança (new permissions backend)</option>
+          </select>
+        </label>
+        <button class="btn secondary" type="submit">Salvar ajustes</button>
+        <button class="btn ghost" type="button" id="btnForget">Esquecer balança pareada</button>
+      </form>
+
+      <div class="card form">
+        <h2 class="card-title">Seus dados</h2>
+        <p class="muted small">Tudo fica guardado só neste celular. Faça backup de vez em quando.</p>
+        <div class="row gap wrap">
+          <button class="btn secondary" id="btnCsv">Exportar planilha (CSV)</button>
+          <button class="btn secondary" id="btnBackup">Fazer backup</button>
+          <label class="btn secondary file-btn">Restaurar backup<input type="file" id="fileRestore" accept="application/json,.json" hidden></label>
+        </div>
+      </div>
+
+      <details class="card">
+        <summary>Diagnóstico Bluetooth</summary>
+        <p class="muted small">Mostra os sinais que o celular está recebendo. Se a balança não for reconhecida, tire um print disto enquanto estiver em cima dela.</p>
+        <div class="row gap wrap">
+          <label class="check"><input type="checkbox" id="debugToggle"> Registrar sinais</label>
+          <button class="btn ghost" id="btnSimulate" type="button">Simular pesagem</button>
+          <button class="btn ghost" id="btnClearLog" type="button">Limpar</button>
+        </div>
+        <pre id="debugLog" class="log"></pre>
+      </details>
+    </section>
+  </main>
+
+  <nav class="tabbar" aria-label="Navegação">
+    <button data-goto="weigh" class="on"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="4"/><path d="M8 9a4 4 0 0 1 8 0"/><path d="M12 9l1.5-2"/></svg>Pesar</button>
+    <button data-goto="history"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 17l5-5 4 4 8-8"/><path d="M14 8h6v6"/></svg>Histórico</button>
+    <button data-goto="profile"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>Perfil</button>
+  </nav>
+
+  <dialog id="detailDialog">
+    <div class="dialog-head">
+      <h2 id="detailTitle"></h2>
+      <button class="icon-btn" id="detailClose" aria-label="Fechar">✕</button>
+    </div>
+    <div id="detailBody" class="metrics"></div>
+    <div class="row between dialog-foot">
+      <button class="btn ghost danger" id="detailDelete">Apagar medição</button>
+    </div>
+  </dialog>
+
+  <div id="toast" class="toast" role="status" hidden></div>
+
+  <script src="js/okok.js"></script>
+  <script src="js/body.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
