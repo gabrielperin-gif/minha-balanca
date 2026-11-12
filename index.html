@@ -50,6 +50,9 @@
       </div>
 
       <h2 class="section-title" id="resultsTitle" hidden>Última medição</h2>
+      <div id="scoreCard" class="card score-card" hidden></div>
+      <div id="analysisCard" class="card analysis-card" hidden></div>
+      <h2 class="section-title" id="metricsTitle" hidden>Seus índices <span class="muted small">· toque para entender cada um</span></h2>
       <div id="results" class="metrics"></div>
       <p id="resultsNote" class="muted small" hidden></p>
     </section>
@@ -94,6 +97,9 @@
         <label>Data de nascimento <input name="birth" type="date" required></label>
         <label>Altura (cm) <input name="height" type="number" inputmode="numeric" min="90" max="230" required></label>
         <label>Meta de peso (kg) <input name="goal" type="number" inputmode="decimal" step="0.1" min="20" max="250" placeholder="Opcional"></label>
+        <label>Cintura (cm) <input name="waist" type="number" inputmode="decimal" step="0.5" min="40" max="200" placeholder="Opcional">
+          <span class="muted small">Meça com fita na altura do umbigo, sem apertar. Melhora a estimativa de gordura visceral. Atualize de vez em quando.</span>
+        </label>
         <button class="btn primary" type="submit">Salvar perfil</button>
         <p id="profileSaved" class="muted small" hidden>Perfil salvo.</p>
       </form>
@@ -125,6 +131,15 @@
         </div>
       </div>
 
+      <details class="card about">
+        <summary>Sobre os números</summary>
+        <p>A balança mede só duas coisas: o <b>peso</b> e a <b>impedância</b>, que é a resistência do corpo a uma corrente elétrica fraquinha que entra por um pé e sai pelo outro. Gordura, músculo, água e os outros índices são <b>calculados</b> a partir desses dois valores e do seu sexo, idade e altura.</p>
+        <p><b>Mais confiáveis:</b> peso, IMC, % de gordura, massa de gordura e massa magra. São estimativas validadas em estudos científicos. O mais útil é acompanhar a <b>tendência</b> ao longo das semanas, não um número isolado.</p>
+        <p><b>Mais aproximados:</b> gordura visceral, massa óssea, proteína e idade metabólica. Saem de modelos estatísticos e servem como referência geral.</p>
+        <p><b>Por que não tem gordura por parte do corpo?</b> Com eletrodos só nos pés, a corrente passa basicamente pelas pernas e pelo quadril. Medir braços e tronco separadamente exige uma balança de 8 eletrodos, com alça para as mãos. Os números "por segmento" que alguns apps mostram para balanças como esta são apenas uma divisão estatística do total, por isso preferi não inventá-los.</p>
+        <p class="muted small">Os resultados podem diferir do app OKOK, que usa um algoritmo próprio e secreto. Se quiser alinhar, use a "Correção da gordura" em Ajustes.</p>
+      </details>
+
       <details class="card">
         <summary>Diagnóstico Bluetooth</summary>
         <p class="muted small">Mostra os sinais que o celular está recebendo. Se a balança não for reconhecida, tire um print disto enquanto estiver em cima dela.</p>
@@ -149,16 +164,25 @@
       <h2 id="detailTitle"></h2>
       <button class="icon-btn" id="detailClose" aria-label="Fechar">✕</button>
     </div>
-    <div id="detailBody" class="metrics"></div>
+    <div id="detailBody"></div>
     <div class="row between dialog-foot">
       <button class="btn ghost danger" id="detailDelete">Apagar medição</button>
     </div>
+  </dialog>
+
+  <dialog id="infoDialog">
+    <div class="dialog-head">
+      <h2 id="infoTitle"></h2>
+      <button class="icon-btn" id="infoClose" aria-label="Fechar">✕</button>
+    </div>
+    <div id="infoBody" class="info-body"></div>
   </dialog>
 
   <div id="toast" class="toast" role="status" hidden></div>
 
   <script src="js/okok.js"></script>
   <script src="js/body.js"></script>
+  <script src="js/metrics.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>

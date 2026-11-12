@@ -1,11 +1,12 @@
 // Guarda o app no celular para abrir mesmo sem internet.
-const CACHE = 'balanca-v1';
+const CACHE = 'balanca-v2';
 const FILES = [
   './',
   'index.html',
   'css/styles.css',
   'js/okok.js',
   'js/body.js',
+  'js/metrics.js',
   'js/app.js',
   'manifest.webmanifest',
   'icons/icon.svg',

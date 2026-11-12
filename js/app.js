@@ -6,7 +6,7 @@
    * ========================================================= */
   const STORE_KEY = 'balanca:v1';
   const defaults = () => ({
-    profile: { name: '', sex: '', birth: '', height: '', goal: '' },
+    profile: { name: '', sex: '', birth: '', height: '', goal: '', waist: '' },
     settings: { fatOffset: 0, btMethod: 'auto', deviceId: '' },
     measurements: [], // {id, ts, weight, impedance, variant}
   });
@@ -64,28 +64,31 @@
   /* =========================================================
    * Cartões de resultado
    * ========================================================= */
-  function metricsHTML(r) {
-    const cards = [];
-    const card = (label, value, unit, tag) =>
-      cards.push(`<div class="metric"><div class="label">${label}</div><div class="value">${value}${unit ? `<small>${unit}</small>` : ''}</div>${tag ? `<span class="tag ${tag.level}">${tag.label}</span>` : ''}</div>`);
-
-    card('Peso', fmt(r.weight, 2), 'kg');
-    if (r.bmi != null) card('IMC', fmt(r.bmi, 1), '', r.bmiClass);
-    if (r.fat != null) card('Gordura corporal', fmt(r.fat, 1), '%', r.fatClass);
-    if (r.fatMass != null) card('Massa de gordura', fmt(r.fatMass, 1), 'kg');
-    if (r.leanMass != null) card('Massa magra', fmt(r.leanMass, 1), 'kg');
-    if (r.muscle != null) card('Músculo esquelético', fmt(r.muscle, 1), 'kg');
-    if (r.water != null) card('Água corporal', fmt(r.water, 1), '%');
-    if (r.bmr != null) card('Metabolismo basal', fmt(r.bmr, 0), 'kcal');
-    if (r.impedance) card('Impedância', fmt(r.impedance, 0), 'Ω');
-    return cards.join('');
-  }
-
   function noteFor(r) {
-    if (r.fat == null) return 'Complete o perfil para ver os índices corporais.';
-    if (r.method === 'estimado pelo IMC') return 'A balança não enviou impedância nesta pesagem, então a gordura foi estimada pelo IMC. Suba descalço e fique parado até o fim para medir a bioimpedância.';
-    return 'Índices calculados por bioimpedância com equações científicas publicadas. São estimativas e podem diferir do app original.';
+    if (!r.complete) return 'Complete o perfil para ver os índices corporais.';
+    if (!r.hasImpedance) return 'A balança não enviou impedância nesta pesagem, então os índices foram estimados pelo IMC. Suba descalço e fique parado até o fim para medir a bioimpedância.';
+    return 'Peso e impedância são medidos; os demais índices são estimativas calculadas com equações científicas publicadas. Toque em um índice para ver como é calculado.';
   }
+
+  // Medição de ~30 dias antes (no mínimo 5 dias), para a análise de tendência.
+  function pastFor(m, list) {
+    const older = list.filter((x) => x.ts <= m.ts - 5 * 86400000);
+    if (!older.length) return null;
+    const target = m.ts - 30 * 86400000;
+    return older.reduce((a, b) => (Math.abs(b.ts - target) < Math.abs(a.ts - target) ? b : a));
+  }
+
+  function analysisFor(m) {
+    const p = profileForCalc();
+    const r = Body.compute(p, m);
+    if (!r.complete) return { r, a: null };
+    const pm = pastFor(m, sorted());
+    const past = pm ? Body.compute(p, pm) : null;
+    const days = pm ? Math.round((m.ts - pm.ts) / 86400000) : 0;
+    return { r, a: Body.analyze(r, past, days) };
+  }
+
+  let currentResult = null;
 
   function renderLatest() {
     const list = sorted();
@@ -93,15 +96,22 @@
     $('#profileName').textContent = db.profile.name ? 'de ' + db.profile.name : '';
     const last = list[list.length - 1];
     if (!last) {
-      $('#resultsTitle').hidden = true;
+      ['#resultsTitle', '#scoreCard', '#analysisCard', '#metricsTitle', '#resultsNote'].forEach((s) => { $(s).hidden = true; });
       $('#results').innerHTML = '';
-      $('#resultsNote').hidden = true;
       return;
     }
-    const r = Body.compute(profileForCalc(), last);
+    const { r, a } = analysisFor(last);
+    currentResult = r;
     $('#resultsTitle').hidden = false;
     $('#resultsTitle').textContent = 'Última medição · ' + new Date(last.ts).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
-    $('#results').innerHTML = metricsHTML(r);
+    $('#scoreCard').hidden = !a;
+    $('#analysisCard').hidden = !a;
+    if (a) {
+      $('#scoreCard').innerHTML = Metrics.scoreHTML(r);
+      $('#analysisCard').innerHTML = '<h2 class="card-title">Análise</h2>' + Metrics.analysisHTML(a);
+    }
+    $('#metricsTitle').hidden = false;
+    $('#results').innerHTML = Metrics.cardsHTML(r);
     $('#resultsNote').hidden = false;
     $('#resultsNote').textContent = noteFor(r);
     if (state === 'idle') {
@@ -434,6 +444,7 @@
       const meta = [
         d.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit' }) + ' · ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
         r.fat != null ? 'gordura ' + fmt(r.fat, 1) + '%' : null,
+        r.score ? 'nota ' + r.score.value : null,
       ].filter(Boolean).join(' · ');
       out.push(`<button class="item" data-id="${esc(m.id)}"><span class="w">${fmt(m.weight, 2)} kg</span><span class="d ${dcls}">${dtxt}</span><span class="meta">${esc(meta)}</span></button>`);
     });
@@ -494,9 +505,34 @@
     if (!m) return;
     detailId = id;
     $('#detailTitle').textContent = new Date(m.ts).toLocaleString('pt-BR', { dateStyle: 'full', timeStyle: 'short' });
-    $('#detailBody').innerHTML = metricsHTML(Body.compute(profileForCalc(), m));
+    const { r, a } = analysisFor(m);
+    detailResult = r;
+    $('#detailBody').innerHTML =
+      (a ? `<div class="card score-card">${Metrics.scoreHTML(r)}</div><div class="card analysis-card">${Metrics.analysisHTML(a)}</div>` : '') +
+      `<div class="metrics">${Metrics.cardsHTML(r)}</div>`;
     $('#detailDialog').showModal();
   }
+  let detailResult = null;
+
+  // Explicação de cada índice
+  function openInfo(key, r) {
+    if (!r) return;
+    $('#infoTitle').textContent = Metrics.label(key);
+    $('#infoBody').innerHTML = Metrics.infoHTML(key, r);
+    $('#infoDialog').showModal();
+  }
+  $('#results').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-metric]');
+    if (b) openInfo(b.dataset.metric, currentResult);
+  });
+  $('#detailBody').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-metric]');
+    if (b) openInfo(b.dataset.metric, detailResult);
+  });
+  $('#infoClose').addEventListener('click', () => $('#infoDialog').close());
+  ['#infoDialog', '#detailDialog'].forEach((s) => {
+    $(s).addEventListener('click', (e) => { if (e.target === e.currentTarget) e.currentTarget.close(); });
+  });
   $('#detailClose').addEventListener('click', () => $('#detailDialog').close());
   $('#detailDelete').addEventListener('click', () => {
     if (!detailId || !confirm('Apagar esta medição? Não dá para desfazer.')) return;
@@ -529,6 +565,7 @@
     pf.birth.value = db.profile.birth || '';
     pf.height.value = db.profile.height || '';
     pf.goal.value = db.profile.goal || '';
+    pf.waist.value = db.profile.waist || '';
     pf.querySelectorAll('input[name="sex"]').forEach((r) => { r.checked = r.value === db.profile.sex; });
     const sf = $('#settingsForm');
     sf.fatOffset.value = db.settings.fatOffset || 0;
@@ -544,6 +581,7 @@
       birth: f.birth.value,
       height: Number(f.height.value) || '',
       goal: Number(String(f.goal.value).replace(',', '.')) || '',
+      waist: Number(String(f.waist.value).replace(',', '.')) || '',
     };
     save();
     renderLatest();
@@ -581,11 +619,16 @@
   $('#btnCsv').addEventListener('click', () => {
     const p = profileForCalc();
     const n = (v, d) => (v == null || !Number.isFinite(v) ? '' : v.toFixed(d).replace('.', ','));
-    const rows = [['Data', 'Hora', 'Peso (kg)', 'Impedância (ohm)', 'IMC', 'Gordura (%)', 'Massa magra (kg)', 'Músculo (kg)', 'Água (%)', 'Metabolismo (kcal)'].join(';')];
+    const rows = [['Data', 'Hora', 'Peso (kg)', 'Impedância (ohm)', 'Pontuação', 'Tipo corporal', 'IMC', 'Gordura (%)', 'Massa de gordura (kg)', 'Gordura visceral', 'Massa magra (kg)', 'Músculo esquelético (kg)', 'Massa muscular (kg)', 'Água (%)', 'Proteína (%)', 'Massa óssea (kg)', 'Metabolismo (kcal)', 'Idade metabólica'].join(';')];
     sorted().forEach((m) => {
       const r = Body.compute(p, m);
       const d = new Date(m.ts);
-      rows.push([d.toLocaleDateString('pt-BR'), d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }), n(m.weight, 2), n(m.impedance, 0), n(r.bmi, 1), n(r.fat, 1), n(r.leanMass, 1), n(r.muscle, 1), n(r.water, 1), n(r.bmr, 0)].join(';'));
+      rows.push([
+        d.toLocaleDateString('pt-BR'), d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+        n(m.weight, 2), n(m.impedance, 0), r.score ? r.score.value : '', r.bodyType || '',
+        n(r.bmi, 1), n(r.fat, 1), n(r.fatMass, 1), n(r.visceral, 0), n(r.leanMass, 1), n(r.skeletal, 1), n(r.muscleMass, 1),
+        n(r.water, 1), n(r.protein, 1), n(r.bone, 1), n(r.bmr, 0), n(r.metabolicAge, 0),
+      ].join(';'));
     });
     download('pesagens-' + today() + '.csv', '﻿' + rows.join('\r\n'), 'text/csv;charset=utf-8');
   });
